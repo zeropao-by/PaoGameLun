@@ -1,0 +1,198 @@
+<Window x:Class="GameLauncher.Views.GameDetailWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="游戏详情"
+        Width="420" Height="520"
+        Icon="/Assets/app.png"
+        WindowStartupLocation="CenterScreen"
+        ResizeMode="NoResize"
+        Background="#1C1C1E"
+        ShowInTaskbar="True"
+        Topmost="True">
+
+    <Grid>
+        <!-- 视频背景层 -->
+        <MediaElement x:Name="VideoBg"
+                      LoadedBehavior="Manual"
+                      UnloadedBehavior="Manual"
+                      Stretch="UniformToFill"
+                      Volume="0"
+                      Visibility="Collapsed"
+                      RenderOptions.BitmapScalingMode="HighQuality"/>
+
+        <!-- 暗化遮罩 -->
+        <Border x:Name="VideoOverlay"
+                Background="#50000000"
+                Visibility="Collapsed"/>
+
+        <!-- 渐变背景 -->
+        <Border>
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#1A1A2E" Offset="0"/>
+                    <GradientStop Color="#16213E" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <!-- 主内容 -->
+        <Grid Margin="32">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 顶部标题栏 -->
+            <Grid Grid.Row="0" Margin="0,8,0,24">
+                <Button Content="✕"
+                        FontSize="16"
+                        Foreground="#8E8E93"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="8"
+                        Cursor="Hand"
+                        Click="Back_Click"
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Top">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="Transparent" CornerRadius="12" Padding="8">
+                                <ContentPresenter HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#30FFFFFF"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+
+            <!-- 游戏图标和大标题 -->
+            <StackPanel Grid.Row="1" 
+                        HorizontalAlignment="Center" 
+                        VerticalAlignment="Center">
+                <!-- 大图标 -->
+                <Border Width="120" Height="120"
+                        CornerRadius="28"
+                        Background="#2C2C2E"
+                        Padding="6">
+                    <Border.Effect>
+                        <DropShadowEffect ShadowDepth="0" BlurRadius="25" Opacity="0.4"/>
+                    </Border.Effect>
+                    <Image x:Name="GameIcon"
+                           Width="108" Height="108"
+                           Stretch="UniformToFill"/>
+                </Border>
+
+                <!-- 游戏名称 -->
+                <TextBlock x:Name="GameName"
+                           Text="游戏名称"
+                           FontSize="24" FontWeight="Bold"
+                           Foreground="White"
+                           TextAlignment="Center"
+                           Margin="0,20,0,0"/>
+
+                <!-- 视频标签 -->
+                <TextBlock x:Name="VideoLabel"
+                           Text=""
+                           FontSize="11"
+                           Foreground="#6E6E73"
+                           TextAlignment="Center"
+                           Margin="0,8,0,0"
+                           Visibility="Collapsed"/>
+            </StackPanel>
+
+            <!-- 启动按钮 -->
+            <Button Grid.Row="2"
+                    x:Name="LaunchBtn"
+                    Content="🚀 启动游戏"
+                    FontSize="17" FontWeight="SemiBold"
+                    Foreground="White"
+                    Background="#007AFF"
+                    BorderThickness="0"
+                    Margin="20,0,20,16"
+                    Padding="0,16"
+                    Cursor="Hand"
+                    Click="Launch_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" Background="#007AFF" CornerRadius="24">
+                            <ContentPresenter HorizontalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#0066DD"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#0055BB"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <!-- 设置按钮行 -->
+            <Grid Grid.Row="3">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- 编辑按钮 -->
+                <Button Grid.Column="0"
+                        Content="✏️ 编辑"
+                        FontSize="14"
+                        Foreground="White"
+                        Background="#2C2C2E"
+                        BorderThickness="0"
+                        Margin="0,0,6,0"
+                        Padding="0,14"
+                        Cursor="Hand"
+                        Click="Edit_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="#2C2C2E" CornerRadius="20">
+                                <ContentPresenter HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#3A3A3C"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+
+                <!-- 设置视频按钮 -->
+                <Button Grid.Column="1"
+                        x:Name="VideoBtn"
+                        Content="🎬 背景"
+                        FontSize="14"
+                        Foreground="White"
+                        Background="#2C2C2E"
+                        BorderThickness="0"
+                        Margin="6,0,0,0"
+                        Padding="0,14"
+                        Cursor="Hand"
+                        Click="SetVideo_Click">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="b" Background="#2C2C2E" CornerRadius="20">
+                                <ContentPresenter HorizontalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="b" Property="Background" Value="#3A3A3C"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

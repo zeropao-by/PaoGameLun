@@ -1,0 +1,23 @@
+﻿<Application x:Class="GameLauncher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:GameLauncher.Views"
+             StartupUri="Views/MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary>
+            <!-- 全局字体 -->
+            <Style TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Segoe UI"/>
+            </Style>
+            <Style TargetType="TextBox">
+                <Setter Property="FontFamily" Value="Segoe UI"/>
+            </Style>
+            <Style TargetType="Button">
+                <Setter Property="FontFamily" Value="Segoe UI"/>
+            </Style>
+
+            <!-- 图标路径转换器 -->
+            <local:IconPathConverter x:Key="IconPathConverter"/>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

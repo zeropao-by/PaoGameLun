@@ -1,0 +1,12 @@
+# Build output
+bin/
+obj/
+*.user
+.vs/
+
+# Published output (不上传发布文件，只上传源码)
+publish_*/
+
+# OS
+Thumbs.db
+.DS_Store
