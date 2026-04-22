@@ -1,4 +1,4 @@
-# PaoGameLun - 多功能游戏启动器
+# PaoGameLun - 游戏启动器
 
 <p align="center">
   <img src="Assets/app.png" alt="PaoGameLun" width="128" height="128" />
