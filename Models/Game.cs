@@ -42,6 +42,10 @@ public class GameInfo
     [JsonIgnore]
     public DateTime? PlayStartTime { get; set; }
 
+    /// <summary>当前运行中的游戏进程 PID 列表（内存中，不持久化，用于精确匹配）</summary>
+    [JsonIgnore]
+    public List<int> RunningProcessIds { get; set; } = [];
+
     [JsonPropertyName("backgroundVideo")]
     public string BackgroundVideo { get; set; } = "";
 

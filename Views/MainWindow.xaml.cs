@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -22,7 +23,6 @@ public partial class MainWindow : Window
     private readonly DispatcherTimer _videoTimer;
     private readonly DispatcherTimer _processCheckTimer; // 检测游戏进程
     private GameInfo? _selectedGame;
-    private bool _videoPlaying = false;
     private bool _isGameRunning = false; // 游戏是否正在运行
     private bool _isMuted = false;
     private bool _isPaused = false;
@@ -454,7 +454,6 @@ public partial class MainWindow : Window
                 VideoBg.ScrubbingEnabled = true;
                 VideoBg.Volume = _volume;  // 使用滑块设置的音量
                 VideoBg.Play();
-                _videoPlaying = true;
                 VideoBg.Visibility = Visibility.Visible;
                 VideoOverlay.Visibility = Visibility.Visible;
                 _videoTimer.Start();
@@ -732,9 +731,20 @@ public partial class MainWindow : Window
                 ? $"累计 {(int)game.TotalPlayTime.TotalMinutes} 分钟"
                 : "";
 
-        GameLastPlayedText.Text = string.IsNullOrEmpty(game.LastPlayed)
-            ? string.IsNullOrEmpty(playTimeInfo) ? "从未启动" : playTimeInfo
-            : $"上次启动：{game.LastPlayed}" + (string.IsNullOrEmpty(playTimeInfo) ? "" : $" · {playTimeInfo}");
+        // 格式化上次启动时间：旧数据只有日期，新数据包含时间
+        string lastPlayedDisplay;
+        if (string.IsNullOrEmpty(game.LastPlayed))
+        {
+            lastPlayedDisplay = string.IsNullOrEmpty(playTimeInfo) ? "从未启动" : playTimeInfo;
+        }
+        else
+        {
+            // 如果包含空格说明有具体时间，否则只有日期
+            var timeStr = game.LastPlayed.Contains(' ') ? game.LastPlayed : $"{game.LastPlayed} 00:00";
+            lastPlayedDisplay = $"上次启动：{timeStr}" + (string.IsNullOrEmpty(playTimeInfo) ? "" : $" · {playTimeInfo}");
+        }
+
+        GameLastPlayedText.Text = lastPlayedDisplay;
 
         // 显示右下角毛玻璃按钮
         LaunchButtonPanel.Visibility = Visibility.Visible;
@@ -744,6 +754,10 @@ public partial class MainWindow : Window
         // 有背景（图片或视频）时显示音量和暂停控件
         bool hasBackground = !string.IsNullOrEmpty(game.BackgroundVideo) || !string.IsNullOrEmpty(game.BackgroundImage);
         VolumeControl.Visibility = hasBackground ? Visibility.Visible : Visibility.Collapsed;
+
+        // 模糊度滑条位置：有背景时在音量面板上方，无背景时贴近启动按钮面板
+        if (BlurControl != null)
+            BlurControl.Margin = new Thickness(0, 0, 20, hasBackground ? 170 : 90);
 
         // 在音量面板显示游戏名称
         if (hasBackground && VolumePanelGameName != null)
@@ -761,35 +775,9 @@ public partial class MainWindow : Window
         LoadBackground(game.BackgroundVideo, game.BackgroundImage);
     }
 
-    // 检测指定exe路径的游戏是否在运行（支持多进程名，逗号分隔）
-    private bool IsGameRunning(string? exePath)
-    {
-        if (string.IsNullOrEmpty(exePath)) return false;
-        
-        var processNames = GetGameProcessNames();
-        if (processNames.Count == 0) return false;
-        
-        try
-        {
-            foreach (var processName in processNames)
-            {
-                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
-                if (processes.Length > 0)
-                {
-                    foreach (var p in processes) p.Dispose();
-                    return true;
-                }
-                foreach (var p in processes) p.Dispose();
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-    
-    /// <summary>获取游戏进程名列表，支持逗号分隔的多进程名，优先使用配置的ProcessName</summary>
+    // ==================== 进程检测与终止（基于 PID 精确匹配）====================
+
+    /// <summary>获取游戏候选进程名列表，用于匹配新启动的进程</summary>
     private List<string> GetGameProcessNames()
     {
         var names = new List<string>();
@@ -800,19 +788,284 @@ public partial class MainWindow : Window
             foreach (var name in _selectedGame.ProcessName.Split(',', '，'))
             {
                 var trimmed = name.Trim();
-                if (!string.IsNullOrEmpty(trimmed) && !names.Contains(trimmed))
+                // 跳过无效进程名（纯数字、太短、明显错误的值）
+                if (!string.IsNullOrEmpty(trimmed) && 
+                    !names.Contains(trimmed) &&
+                    trimmed.Length > 1 &&
+                    !System.Text.RegularExpressions.Regex.IsMatch(trimmed, @"^\d+$"))
                     names.Add(trimmed);
             }
         }
         
-        // 如果配置为空，从ExePath推断
-        if (names.Count == 0 && !string.IsNullOrEmpty(_selectedGame?.ExePath))
+        // 从真实 ExePath 推断进程名（对 lnk 先解析为实际 exe）
+        if (!string.IsNullOrEmpty(_selectedGame?.ExePath))
         {
-            names.Add(Path.GetFileNameWithoutExtension(_selectedGame.ExePath));
+            var realExePath = ShortcutResolver.GetTargetPath(_selectedGame.ExePath);
+            var exeName = Path.GetFileNameWithoutExtension(realExePath);
+            if (!string.IsNullOrEmpty(exeName) && !names.Contains(exeName))
+                names.Add(exeName);
+
+            // UE 引擎自动识别
+            var path = realExePath.Replace('/', '\\');
+            var exeDir = Path.GetDirectoryName(path);
+            
+            // 方式1：直接匹配 exe 路径中的 UE 结构
+            var ueMatch = System.Text.RegularExpressions.Regex.Match(
+                path, @"\\([^\\]+)\\Binaries\\Win64\\", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            
+            if (ueMatch.Success)
+            {
+                AddUEShippingNames(names, ueMatch.Groups[1].Value);
+            }
+            else if (!string.IsNullOrEmpty(exeDir))
+            {
+                // 方式2：扫描同级子目录查找 UE 结构
+                try
+                {
+                    foreach (var subDir in System.IO.Directory.EnumerateDirectories(exeDir))
+                    {
+                        var binariesDir = Path.Combine(subDir, "Binaries", "Win64");
+                        if (System.IO.Directory.Exists(binariesDir))
+                        {
+                            AddUEShippingNames(names, Path.GetFileName(subDir));
+                            break;
+                        }
+                        try
+                        {
+                            foreach (var subSubDir in System.IO.Directory.EnumerateDirectories(subDir))
+                            {
+                                var bDir = Path.Combine(subSubDir, "Binaries", "Win64");
+                                if (System.IO.Directory.Exists(bDir))
+                                {
+                                    AddUEShippingNames(names, Path.GetFileName(subSubDir));
+                                    break;
+                                }
+                            }
+                        }
+                        catch { }
+                        
+                        if (names.Any(n => n.Contains("Shipping"))) break;
+                    }
+                }
+                catch { }
+            }
         }
         
         return names;
     }
+
+    private void AddUEShippingNames(List<string> names, string projectDir)
+    {
+        foreach (var sn in new[] { $"{projectDir}-Win64-Shipping", "Client-Win64-Shipping" })
+        {
+            if (!names.Contains(sn))
+                names.Add(sn);
+        }
+    }
+
+    /// <summary>
+    /// 获取用于路径匹配的真实 exe 路径（lnk 解析为实际 exe）。
+    /// 这是核心：直接用用户填的 exe 路径去精确匹配 MainModule.FileName。
+    /// </summary>
+    private string? GetRealExePathForMatching()
+    {
+        if (_selectedGame == null || string.IsNullOrEmpty(_selectedGame.ExePath)) return null;
+        
+        // 对 lnk 快捷方式，解析出真实目标 exe 路径
+        var realPath = ShortcutResolver.GetTargetPath(_selectedGame.ExePath);
+        if (!File.Exists(realPath)) return null;
+        
+        return Path.GetFullPath(realPath);
+    }
+
+    /// <summary>
+    /// 启动游戏后，延迟捕获实际运行的进程 PID。
+    /// 先记录启动前的进程快照，启动后对比新增的匹配进程。
+    /// </summary>
+    private void CaptureGameProcessIds()
+    {
+        if (_selectedGame == null) return;
+        
+        var game = _selectedGame;
+        var candidateNames = GetGameProcessNames();
+        
+        // 记录启动前的已有进程 PID
+        var beforePids = new HashSet<int>();
+        foreach (var name in candidateNames)
+        {
+            try
+            {
+                foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
+                {
+                    beforePids.Add(p.Id);
+                    p.Dispose();
+                }
+            }
+            catch { }
+        }
+        
+        // 延迟 3 秒后捕获新增进程（给游戏启动时间）
+        Task.Delay(3000).ContinueWith(_ =>
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (_selectedGame != game) return; // 用户已切换游戏
+                
+                var newPids = new List<int>();
+                foreach (var name in candidateNames)
+                {
+                    try
+                    {
+                        foreach (var p in System.Diagnostics.Process.GetProcessesByName(name))
+                        {
+                            if (!beforePids.Contains(p.Id))
+                            {
+                                newPids.Add(p.Id);
+                            }
+                            p.Dispose();
+                        }
+                    }
+                    catch { }
+                }
+                
+                if (newPids.Count > 0)
+                {
+                    game.RunningProcessIds = newPids;
+                    _isGameRunning = true;
+                    UpdateLaunchButton();
+                }
+            });
+        });
+    }
+
+    /// <summary>检测游戏是否在运行：PID → 路径精确匹配(lnk支持) → 进程名+目录 → 进程名模糊</summary>
+    private bool IsGameRunning(string? exePath)
+    {
+        if (_selectedGame == null) return false;
+        
+        // 优先：检查已记录的 PID 是否存活
+        if (_selectedGame.RunningProcessIds.Count > 0)
+        {
+            foreach (var pid in _selectedGame.RunningProcessIds.ToList())
+            {
+                try
+                {
+                    var proc = System.Diagnostics.Process.GetProcessById(pid);
+                    if (!proc.HasExited)
+                    {
+                        proc.Dispose();
+                        return true;
+                    }
+                    // 进程已退出，清理
+                    proc.Dispose();
+                    _selectedGame.RunningProcessIds.Remove(pid);
+                }
+                catch (ArgumentException)
+                {
+                    // 进程不存在，清理
+                    _selectedGame.RunningProcessIds.Remove(pid);
+                }
+            }
+            return false;
+        }
+
+        // 第二优先：路径精确匹配 — 直接用用户填的 exe 路径（lnk 解析为真实 exe）匹配 MainModule.FileName
+        var realExePath = GetRealExePathForMatching();
+        if (realExePath != null)
+        {
+            try
+            {
+                // 获取所有运行中的进程，逐个对比 MainModule.FileName 与用户填的真实 exe 路径
+                var allProcesses = System.Diagnostics.Process.GetProcesses();
+                foreach (var p in allProcesses)
+                {
+                    try
+                    {
+                        if (p.MainModule?.FileName != null &&
+                            string.Equals(
+                                Path.GetFullPath(p.MainModule.FileName),
+                                realExePath,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            // 匹配成功，记录 PID 供后续精确使用
+                            if (!_selectedGame.RunningProcessIds.Contains(p.Id))
+                                _selectedGame.RunningProcessIds.Add(p.Id);
+                            p.Dispose();
+                            return true;
+                        }
+                    }
+                    catch { } // 某些系统进程无法访问 MainModule
+                    finally { try { p.Dispose(); } catch { } }
+                }
+            }
+            catch { }
+        }
+
+        // 回退：没有记录的 PID 时，用进程名 + 路径验证匹配
+        if (string.IsNullOrEmpty(exePath)) return false;
+        
+        var processNames = GetGameProcessNames();
+        if (processNames.Count == 0) return false;
+        
+        var gameDir = Path.GetDirectoryName(exePath);
+        
+        try
+        {
+            foreach (var processName in processNames)
+            {
+                bool needsPathCheck = processName.Contains("Shipping") || processName.Contains("Win64");
+                
+                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+                if (processes.Length > 0)
+                {
+                    if (needsPathCheck && !string.IsNullOrEmpty(gameDir))
+                    {
+                        foreach (var p in processes)
+                        {
+                            try
+                            {
+                                if (p.MainModule?.FileName != null)
+                                {
+                                    var procDir = Path.GetDirectoryName(p.MainModule.FileName);
+                                    if (procDir != null && 
+                                        (procDir.StartsWith(gameDir, StringComparison.OrdinalIgnoreCase) ||
+                                         gameDir.StartsWith(procDir, StringComparison.OrdinalIgnoreCase)))
+                                    {
+                                        // 回退匹配成功，记录 PID 供后续精确使用
+                                        if (!_selectedGame.RunningProcessIds.Contains(p.Id))
+                                            _selectedGame.RunningProcessIds.Add(p.Id);
+                                        p.Dispose();
+                                        return true;
+                                    }
+                                }
+                            }
+                            catch { }
+                            p.Dispose();
+                        }
+                    }
+                    else
+                    {
+                        foreach (var p in processes)
+                        {
+                            if (!_selectedGame.RunningProcessIds.Contains(p.Id))
+                                _selectedGame.RunningProcessIds.Add(p.Id);
+                            p.Dispose();
+                        }
+                        return true;
+                    }
+                }
+                foreach (var p in processes) p.Dispose();
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    // ===================================================================
 
     private void ClearGameSelection()
     {
@@ -839,7 +1092,6 @@ public partial class MainWindow : Window
     private void StopVideo()
     {
         _videoTimer.Stop();
-        _videoPlaying = false;
         try { VideoBg.Stop(); } catch { }
         VideoBg.Source = null;
         VideoBg.Visibility = Visibility.Collapsed;
@@ -934,7 +1186,10 @@ public partial class MainWindow : Window
             // 启动新游戏
             _gameManager.LaunchGame(_selectedGame.Id);
             _selectedGame.PlayStartTime = DateTime.Now;
-            GameLastPlayedText.Text = $"上次启动：{DateTime.Now:yyyy-MM-dd}";
+            GameLastPlayedText.Text = $"上次启动：{DateTime.Now:yyyy-MM-dd HH:mm}";
+
+            // 记录游戏启动后的实际进程 PID（延迟捕获，给游戏启动时间）
+            CaptureGameProcessIds();
         }
         catch (Exception ex)
         {
@@ -943,69 +1198,157 @@ public partial class MainWindow : Window
         }
     }
     
-    // 终止游戏进程
+    // 终止游戏进程（优先级从高到低）：PID → 路径精确匹配(lnk支持) → 进程名+目录 → 进程名模糊 → 名称模糊
     private void TerminateGame()
     {
         if (_selectedGame == null) return;
         
-        // 获取游戏进程名列表
-        var processNames = GetGameProcessNames();
-        if (processNames.Count == 0) return;
-        
         try
         {
-            foreach (var processName in processNames)
+            bool anyKilled = false;
+            
+            // 优先：用记录的 PID 精确终止
+            if (_selectedGame.RunningProcessIds.Count > 0)
             {
-                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
-                foreach (var p in processes)
+                foreach (var pid in _selectedGame.RunningProcessIds.ToList())
                 {
                     try
                     {
-                        p.Kill();
-                        p.WaitForExit(3000);
+                        var proc = System.Diagnostics.Process.GetProcessById(pid);
+                        if (!proc.HasExited)
+                        {
+                            proc.Kill();
+                            proc.WaitForExit(3000);
+                            anyKilled = true;
+                        }
+                        proc.Dispose();
                     }
                     catch { }
-                    finally
+                }
+                _selectedGame.RunningProcessIds.Clear();
+            }
+
+            // 第二优先：路径精确匹配终止 — 用真实 exe 路径匹配 MainModule.FileName 来 Kill
+            if (!anyKilled)
+            {
+                var realExePath = GetRealExePathForMatching();
+                if (realExePath != null)
+                {
+                    try
                     {
-                        p.Dispose();
+                        var allProcesses = System.Diagnostics.Process.GetProcesses();
+                        foreach (var p in allProcesses)
+                        {
+                            try
+                            {
+                                if (p.MainModule?.FileName != null &&
+                                    string.Equals(
+                                        Path.GetFullPath(p.MainModule.FileName),
+                                        realExePath,
+                                        StringComparison.OrdinalIgnoreCase))
+                                {
+                                    p.Kill();
+                                    p.WaitForExit(3000);
+                                    anyKilled = true;
+                                    break; // 找到就停，一个 exe 只有一个主进程
+                                }
+                            }
+                            catch { } // 某些系统进程无法访问 MainModule
+                            finally { try { p.Dispose(); } catch { } }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            // 第三优先：进程名 + 目录验证匹配
+            if (!anyKilled)
+            {
+                var processNames = GetGameProcessNames();
+                var gameDir = Path.GetDirectoryName(_selectedGame.ExePath) ?? "";
+                
+                foreach (var processName in processNames)
+                {
+                    bool needsPathCheck = processName.Contains("Shipping") || processName.Contains("Win64");
+                    
+                    var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+                    foreach (var p in processes)
+                    {
+                        try
+                        {
+                            if (needsPathCheck && !string.IsNullOrEmpty(gameDir))
+                            {
+                                try
+                                {
+                                    if (p.MainModule?.FileName != null)
+                                    {
+                                        var procDir = Path.GetDirectoryName(p.MainModule.FileName);
+                                        if (procDir == null ||
+                                            (!procDir.StartsWith(gameDir, StringComparison.OrdinalIgnoreCase) &&
+                                             !gameDir.StartsWith(procDir, StringComparison.OrdinalIgnoreCase)))
+                                        {
+                                            p.Dispose();
+                                            continue;
+                                        }
+                                    }
+                                }
+                                catch { }
+                            }
+                            
+                            p.Kill();
+                            p.WaitForExit(3000);
+                            anyKilled = true;
+                        }
+                        catch { }
+                        finally
+                        {
+                            p.Dispose();
+                        }
                     }
                 }
             }
             
             // 如果精确匹配没找到，尝试模糊匹配（兼容旧逻辑）
-            bool anyKilled = false;
-            foreach (var processName in processNames)
-            {
-                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
-                if (processes.Length > 0) anyKilled = true;
-                foreach (var p in processes) p.Dispose();
-            }
-            
             if (!anyKilled)
             {
-                var allProcesses = System.Diagnostics.Process.GetProcesses();
-                foreach (var p in allProcesses)
+                var processNames = GetGameProcessNames();
+                foreach (var processName in processNames)
                 {
-                    try
+                    var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+                    if (processes.Length > 0)
                     {
-                        if (p.Id == 0 || p.Id == 4) continue;
-                        
-                        string pName = p.ProcessName.ToLower();
-                        string gameName = _selectedGame.Name.ToLower();
-                        
-                        if ((pName.Contains(gameName) || gameName.Contains(pName)) && pName.Length > 2)
+                        anyKilled = true;
+                        foreach (var p in processes) p.Dispose();
+                    }
+                }
+                
+                if (!anyKilled)
+                {
+                    var allProcesses = System.Diagnostics.Process.GetProcesses();
+                    foreach (var p in allProcesses)
+                    {
+                        try
                         {
-                            if (!pName.Contains("explorer") && !pName.Contains("system") && !pName.Contains("service"))
+                            if (p.Id == 0 || p.Id == 4) continue;
+                            
+                            string pName = p.ProcessName.ToLower();
+                            string gameName = _selectedGame.Name.ToLower();
+                            
+                            if ((pName.Contains(gameName) || gameName.Contains(pName)) && pName.Length > 2)
                             {
-                                p.Kill();
-                                p.WaitForExit(3000);
+                                if (!pName.Contains("explorer") && !pName.Contains("system") && !pName.Contains("service"))
+                                {
+                                    p.Kill();
+                                    p.WaitForExit(3000);
+                                    anyKilled = true;
+                                }
                             }
                         }
-                    }
-                    catch { }
-                    finally
-                    {
-                        p.Dispose();
+                        catch { }
+                        finally
+                        {
+                            p.Dispose();
+                        }
                     }
                 }
             }

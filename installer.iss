@@ -2,11 +2,11 @@
 ; 鸣潮游戏启动器安装程序
 
 #define MyAppName "PaoGameLun"
-#define MyAppVersion "0.3.4"
+#define MyAppVersion "0.3.7"
 #define MyAppPublisher "zeropao-by"
 #define MyAppURL "https://github.com/zeropao-by/PaoGameLun"
 #define MyAppExeName "PaoGameLun.exe"
-#define SourceDir "C:\Users\Administrator\WorkBuddy\20260419231142\publish_v34"
+#define SourceDir "C:\Users\Administrator\WorkBuddy\20260419231142\publish_v37"
 
 [Setup]
 ; 应用程序基本信息

@@ -34,6 +34,19 @@ public partial class AddGameDialog : Window
     private static extern void DragFinish(IntPtr hDrop);
 
     private const int WM_DROPFILES = 0x0233;
+    private const int WM_NCHITTEST = 0x0084;
+    private const int HTLEFT = 10;
+    private const int HTRIGHT = 11;
+    private const int HTTOP = 12;
+    private const int HTTOPLEFT = 13;
+    private const int HTTOPRIGHT = 14;
+    private const int HTBOTTOM = 15;
+    private const int HTBOTTOMLEFT = 16;
+    private const int HTBOTTOMRIGHT = 17;
+    private const int HTCLIENT = 1;
+
+    // 边框缩放相关
+    private const int _resizeBorderThickness = 6;  // 边缘检测宽度（像素）
 
     private HwndSource? _hwndSource;
 
@@ -114,6 +127,13 @@ public partial class AddGameDialog : Window
     /// </summary>
     private IntPtr WndProcHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (msg == WM_NCHITTEST)
+        {
+            // 边框缩放检测
+            handled = true;
+            return HitTest(lParam.ToInt32());
+        }
+
         if (msg == WM_DROPFILES)
         {
             handled = true;
@@ -154,6 +174,39 @@ public partial class AddGameDialog : Window
         }
 
         return IntPtr.Zero;
+    }
+
+    /// <summary>
+    /// 边框缩放检测 - 判断鼠标是否在窗口边缘
+    /// </summary>
+    private int HitTest(int lParam)
+    {
+        // 获取屏幕坐标
+        var pt = new Point(
+            (short)(lParam & 0xFFFF),
+            (short)((lParam >> 16) & 0xFFFF));
+
+        // 转换为窗口相对坐标
+        var screenToClient = PointFromScreen(pt);
+        double w = ActualWidth;
+        double h = ActualHeight;
+
+        // 边缘检测
+        bool left = screenToClient.X < _resizeBorderThickness;
+        bool right = screenToClient.X > w - _resizeBorderThickness;
+        bool top = screenToClient.Y < _resizeBorderThickness;
+        bool bottom = screenToClient.Y > h - _resizeBorderThickness;
+
+        if (left && top) return HTTOPLEFT;
+        if (right && top) return HTTOPRIGHT;
+        if (left && bottom) return HTBOTTOMLEFT;
+        if (right && bottom) return HTBOTTOMRIGHT;
+        if (left) return HTLEFT;
+        if (right) return HTRIGHT;
+        if (top) return HTTOP;
+        if (bottom) return HTBOTTOM;
+
+        return HTCLIENT;  // 非边缘区域，交给正常处理
     }
 
     private void DropZone_Click(object sender, MouseButtonEventArgs e)

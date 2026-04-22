@@ -7,7 +7,7 @@
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"
-        ResizeMode="NoResize"
+        ResizeMode="CanResize"
         ShowInTaskbar="False">
 
     <Window.Resources>

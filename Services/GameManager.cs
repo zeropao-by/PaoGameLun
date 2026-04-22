@@ -1,6 +1,5 @@
 using System;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -10,7 +9,7 @@ using GameLauncher.Models;
 
 namespace GameLauncher.Services;
 
-public class GameManager : INotifyPropertyChanged
+public class GameManager
 {
     private readonly string _dataDir;
     private readonly string _gamesFile;
@@ -19,8 +18,6 @@ public class GameManager : INotifyPropertyChanged
 
     public ObservableCollection<GameInfo> Games { get; } = [];
     public AppSettings Settings { get; private set; } = new();
-
-    public event PropertyChangedEventHandler? PropertyChanged;
 
     public GameManager()
     {
@@ -181,7 +178,7 @@ public class GameManager : INotifyPropertyChanged
         if (!File.Exists(game.ExePath))
             throw new FileNotFoundException($"游戏文件不存在: {game.ExePath}");
 
-        game.LastPlayed = DateTime.Now.ToString("yyyy-MM-dd");
+        game.LastPlayed = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         SaveGames();
 
         var pathToLaunch = game.ExePath;
