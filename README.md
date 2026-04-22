@@ -69,10 +69,10 @@
 
 ## 截图
 
-<img width="1387" height="803" alt="image" src="https://github.com/user-attachments/assets/1877f8aa-015c-44f6-9790-aef1e642babc" />
-<img width="1387" height="803" alt="image" src="https://github.com/user-attachments/assets/8d69c4a9-2717-476d-a3a9-0cef54ae1f2a" />
-<img width="1389" height="800" alt="image" src="https://github.com/user-attachments/assets/cdb3f56e-c071-4163-b803-8ce1bab52517" />
-<img width="1390" height="802" alt="image" src="https://github.com/user-attachments/assets/0debcdc8-3626-4471-b832-f6d204416f38" />
+<img width="1809" height="901" alt="image" src="https://github.com/user-attachments/assets/d2fae1ca-4933-4304-9a71-5427567877b9" />
+<img width="1813" height="899" alt="image" src="https://github.com/user-attachments/assets/d510b6f8-9610-4d8d-a1b6-032f84071a74" />
+<img width="1814" height="906" alt="image" src="https://github.com/user-attachments/assets/7e67abf3-1c9b-438a-aa0c-24dfa2d484f3" />
+
 
 ---
 
