@@ -5,7 +5,15 @@ obj/
 .vs/
 
 # Published output (不上传发布文件，只上传源码)
+publish/
 publish_*/
+
+# Installer output
+installer/
+
+# Documentation
+README.md
+打包指南.txt
 
 # OS
 Thumbs.db

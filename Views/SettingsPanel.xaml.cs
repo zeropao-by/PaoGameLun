@@ -3,7 +3,6 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using GameLauncher.Models;
@@ -99,7 +98,22 @@ public partial class SettingsPanel : Window
             {
                 if (enabled)
                 {
-                    var exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    // 尝试多种方法获取可执行文件路径
+                    string? exePath = null;
+                    
+                    // 方法1：使用EntryAssembly
+                    exePath = System.Reflection.Assembly.GetEntryAssembly()?.Location;
+                    
+                    // 方法2：如果方法1失败，使用当前进程
+                    if (string.IsNullOrEmpty(exePath))
+                    {
+                        try
+                        {
+                            exePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                        }
+                        catch { }
+                    }
+                    
                     if (!string.IsNullOrEmpty(exePath))
                     {
                         key.SetValue("PaoGameLun", $"\"{exePath}\"");
@@ -446,7 +460,7 @@ public partial class SettingsPanel : Window
     /// <summary>
     /// 创建按钮模板
     /// </summary>
-    private ControlTemplate CreateButtonTemplate(string hoverColor)
+    private static ControlTemplate CreateButtonTemplate(string hoverColor)
     {
         var template = new ControlTemplate(typeof(Button));
         var border = new FrameworkElementFactory(typeof(Border));

@@ -222,6 +222,8 @@
                         </Grid>
                     </Border>
 
+
+
                     <!-- 当前游戏设置（动态显示） -->
                     <StackPanel x:Name="GameSettingsPanel" Visibility="Collapsed">
                         <TextBlock Text="当前游戏"

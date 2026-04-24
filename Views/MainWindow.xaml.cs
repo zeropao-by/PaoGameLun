@@ -39,8 +39,7 @@ public partial class MainWindow : Window
     private List<GameInfo>? _filteredGames; // 筛选后的游戏列表（排序后）
 
     // 主题颜色预设
-    private static readonly List<(string Name, string Hex)> ThemeColors = new()
-    {
+    private static readonly List<(string Name, string Hex)> ThemeColors = [
         ("蓝色 Blue",   "#007AFF"),
         ("紫色 Purple", "#AF52DE"),
         ("粉色 Pink",   "#FF2D55"),
@@ -49,7 +48,7 @@ public partial class MainWindow : Window
         ("青色 Teal",   "#5AC8FA"),
         ("红色 Red",    "#FF3B30"),
         ("金色 Gold",   "#FFD60A"),
-    };
+    ];
 
     public MainWindow()
     {
@@ -96,10 +95,10 @@ public partial class MainWindow : Window
         try
         {
             string baseDir = AppContext.BaseDirectory;
-            string[] pngPaths = {
+            string[] pngPaths = [
                 Path.Combine(baseDir, "Assets", "app.png"),
                 Path.Combine(baseDir, "app.png"),
-            };
+            ];
 
             System.Drawing.Image? srcImg = null;
             foreach (var path in pngPaths)
@@ -295,11 +294,9 @@ public partial class MainWindow : Window
     {
         foreach (var item in GameIconList.Items)
         {
-            var container = GameIconList.ItemContainerGenerator.ContainerFromItem(item) as ContentPresenter;
-            if (container == null) continue;
+            if (GameIconList.ItemContainerGenerator.ContainerFromItem(item) is not ContentPresenter container) continue;
 
-            var btn = FindVisualChild<Button>(container);
-            if (btn == null) continue;
+            if (FindVisualChild<Button>(container) is not Button btn) continue;
 
             // 确保模板已应用
             btn.ApplyTemplate();
@@ -421,7 +418,7 @@ public partial class MainWindow : Window
         StopImage();
 
         // 去除 url: 前缀获取实际路径
-        string? GetActualPath(string? path) => path?.StartsWith("url:") == true ? path.Substring(4) : path;
+        string? GetActualPath(string? path) => path?.StartsWith("url:") == true ? path[4..] : path;
         
         // 判断去掉前缀后是否为网络URL
         bool IsUrl(string? path)
@@ -514,6 +511,15 @@ public partial class MainWindow : Window
 
     private const int WM_NCHITTEST = 0x0084;
     private const int WM_NCLBUTTONDOWN = 0x00A1;
+    private const int WM_EXITSIZEMOVE = 0x0232;
+    private const int SC_MAXIMIZE = 0xF030;
+    private const int WM_LBUTTONDOWN = 0x0201;
+    private const int WM_MOUSEMOVE = 0x0200;
+    private const int WM_LBUTTONUP = 0x0202;
+    private const int WM_SIZE = 0x0005;
+    private const int SIZE_RESTORED = 0;
+    private const int SIZE_MAXIMIZED = 2;
+    private const double DRAG_THRESHOLD = 30.0; // 拖动阈值，30像素
     private const int HTLEFT = 10;
     private const int HTRIGHT = 11;
     private const int HTTOP = 12;
@@ -522,7 +528,6 @@ public partial class MainWindow : Window
     private const int HTBOTTOM = 15;
     private const int HTBOTTOMLEFT = 16;
     private const int HTBOTTOMRIGHT = 17;
-    private const int HTCAPTION = 2;
 
     protected override void OnSourceInitialized(EventArgs e)
     {
@@ -607,21 +612,34 @@ public partial class MainWindow : Window
         _notifyIcon = new System.Windows.Forms.NotifyIcon
         {
             Text = "PaoGameLun",
-            Visible = false
+            Visible = true
         };
 
         // 创建图标
         try
         {
             string baseDir = AppContext.BaseDirectory;
-            string iconPath = Path.Combine(baseDir, "Assets", "app.png");
-            if (File.Exists(iconPath))
+            string[] iconPaths = [
+                Path.Combine(baseDir, "Assets", "app.png"),
+                Path.Combine(baseDir, "app.png"),
+                Path.Combine(AppContext.BaseDirectory, "app.ico"),
+                Path.Combine(AppContext.BaseDirectory, "Assets", "app.ico")
+            ];
+            
+            bool foundIcon = false;
+            foreach (var iconPath in iconPaths)
             {
-                using var bmp = new System.Drawing.Bitmap(iconPath);
-                _notifyIcon.Icon = System.Drawing.Icon.FromHandle(bmp.GetHicon());
-                GC.KeepAlive(bmp);
+                if (File.Exists(iconPath))
+                {
+                    using var bmp = new System.Drawing.Bitmap(iconPath);
+                    _notifyIcon.Icon = System.Drawing.Icon.FromHandle(bmp.GetHicon());
+                    GC.KeepAlive(bmp);
+                    foundIcon = true;
+                    break;
+                }
             }
-            else
+            
+            if (!foundIcon)
             {
                 // 使用默认图标
                 _notifyIcon.Icon = SystemIcons.Application;
@@ -742,11 +760,26 @@ public partial class MainWindow : Window
         SetVideoBtn.Visibility = Visibility.Visible;
 
         // 有背景（图片或视频）时显示音量和暂停控件
-        bool hasBackground = !string.IsNullOrEmpty(game.BackgroundVideo) || !string.IsNullOrEmpty(game.BackgroundImage);
-        VolumeControl.Visibility = hasBackground ? Visibility.Visible : Visibility.Collapsed;
+        bool hasVideoBackground = !string.IsNullOrEmpty(game.BackgroundVideo);
+        VolumeControl.Visibility = hasVideoBackground ? Visibility.Visible : Visibility.Collapsed;
+
+        // 调整模糊控制条位置
+        if (BlurControl != null)
+        {
+            if (hasVideoBackground)
+            {
+                // 有视频背景时，模糊控制条在音量面板上方
+                BlurControl.Margin = new Thickness(0, 0, 20, 170);
+            }
+            else
+            {
+                // 无视频背景时，模糊控制条在启动按钮上方
+                BlurControl.Margin = new Thickness(0, 0, 20, 90);
+            }
+        }
 
         // 在音量面板显示游戏名称
-        if (hasBackground && VolumePanelGameName != null)
+        if (hasVideoBackground && VolumePanelGameName != null)
         {
             VolumePanelGameName.Text = game.Name;
         }

@@ -18,6 +18,7 @@
     <PublishSingleFile>false</PublishSingleFile>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <Nullable>enable</Nullable>
   </PropertyGroup>
 
   <ItemGroup>
@@ -26,7 +27,16 @@
   </ItemGroup>
 
   <ItemGroup>
-<Resource Include="Assets\app.ico" />
+    <Resource Include="Assets\app.ico" />
     <Resource Include="Assets\app.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Assets\app.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Assets\app.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>
